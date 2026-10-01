@@ -10,6 +10,8 @@ from werkzeug.utils import secure_filename
 from .. import db
 from ..models import Job, Hotfolder
 from ..rip.job_builder import WasatchXML
+from ..rip import status as rip_status
+from ..rip.status import analyze_url_or_path
 from ..thumbs import make_thumb
 
 bp = Blueprint("main", __name__)
@@ -75,12 +77,18 @@ def new_job():
     artwork_path = job_dir / job.source_filename
     uploaded.save(artwork_path)
 
+    thumb = None
     try:
         thumb = make_thumb(artwork_path, job_dir)
     except Exception:
         current_app.logger.exception("Thumbnail generation failed")
-        thumb = None
     job.thumb_filename = thumb.name if thumb else ""
+
+    if job.pageno and job.pageno > 0:
+        analysis = analyze_url_or_path(str(artwork_path))
+        if analysis and analysis["pages"] and job.pageno > analysis["pages"]:
+            flash(f"That file has only {analysis['pages']} page(s); page {job.pageno} is not valid.", "danger")
+            return redirect(url_for("main.new_job"))
 
     db.session.add(job)
     db.session.commit()
@@ -97,6 +105,28 @@ def new_job():
 
     flash("Job submitted to hot folder.", "success")
     return redirect(url_for("main.index"))
+
+
+@bp.route("/api/imgconfs/<unit>")
+def api_imgconfs(unit):
+    confs = rip_status.get_imgconfs(unit)
+    return {"online": bool(confs) or rip_status.get_system()["online"], "imgconfs": confs}
+
+
+@bp.route("/api/file-analysis/<job_id>")
+def api_file_analysis(job_id):
+    job = Job.query.get_or_404(job_id)
+    info = analyze_url_or_path(str(cfg.UPLOAD_DIR / job.id / job.source_filename))
+    if info is None:
+        return {"available": False}, 503
+    return {"available": True, **info}
+
+
+@bp.route("/status")
+def rip_status_page():
+    system = rip_status.get_system()
+    queues = {u["number"]: rip_status.get_queue(u["number"]) for u in system["units"] if u.get("number")}
+    return render_template("status.html", system=system, queues=queues)
 
 
 @bp.route("/settings", methods=["GET", "POST"])

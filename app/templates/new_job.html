@@ -49,7 +49,9 @@
     </div>
     <div class="col-md-6">
       <label class="form-label">Imaging config</label>
-      <input type="text" class="form-control" name="imgconf" placeholder="optional IMGCONF name">
+      <input type="text" class="form-control" name="imgconf" id="imgconf" list="imgconf_list" placeholder="leave blank for unit default">
+      <datalist id="imgconf_list"></datalist>
+      <div class="form-text" id="imgconf_hint">select a print unit to load configs from SoftRIP</div>
     </div>
   </div>
   <div class="mb-3">
@@ -68,4 +70,34 @@
     <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Submit to hot folder</button>
   </div>
 </form>
+{% endblock %}
+{% block scripts %}
+<script>
+const unitSelect = document.querySelector('select[name="unit"]');
+const imgconfInput = document.getElementById('imgconf');
+const imgconfList = document.getElementById('imgconf_list');
+const imgconfHint = document.getElementById('imgconf_hint');
+
+async function loadImgconfs() {
+  imgconfList.innerHTML = '';
+  imgconfHint.textContent = 'loading configs from SoftRIP…';
+  try {
+    const r = await fetch(`/api/imgconfs/${unitSelect.value}`);
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    (data.imgconfs || []).forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      imgconfList.appendChild(opt);
+    });
+    imgconfHint.textContent = data.imgconfs.length
+      ? `${data.imgconfs.length} config(s) from SoftRIP — start typing to filter`
+      : 'could not load configs — enter an IMGCONF name manually';
+  } catch {
+    imgconfHint.textContent = 'could not load configs — enter an IMGCONF name manually';
+  }
+}
+unitSelect.addEventListener('change', loadImgconfs);
+loadImgconfs();
+</script>
 {% endblock %}

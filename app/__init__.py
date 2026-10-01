@@ -16,6 +16,14 @@ def create_app():
     from app.routes.main import bp
     app.register_blueprint(bp)
 
+    @app.template_filter("timestamp_to_dt")
+    def timestamp_to_dt(ts):
+        from datetime import datetime
+        try:
+            return datetime.fromtimestamp(int(ts)).strftime("%H:%M:%S")
+        except (ValueError, TypeError):
+            return ts
+
     with app.app_context():
         db.create_all()
 

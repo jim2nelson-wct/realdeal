@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}SoftRIP Status{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">SoftRIP Status</h1>
+  <span class="badge {{ 'bg-success' if system.online else 'bg-danger' }}">
+    {{ 'Online' if system.online else 'Offline' }}
+  </span>
+</div>
+{% if system.online %}
+  <p class="text-secondary small">
+    {{ system.name or 'Wasatch SoftRIP' }}{% if system.serial %} &middot; SN {{ system.serial }}{% endif %} &middot; talks to SoftRIP's ImageNET server at localhost
+  </p>
+  {% for unit in system.units %}
+  {% set q = queues[unit.number] %}
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between">
+      <span><strong>Unit {{ unit.number }}</strong> — {{ unit.name or 'Not configured' }}</span>
+    </div>
+    <div class="card-body">
+      {% if q.available %}
+        <h2 class="h6 text-secondary">RIP Queue</h2>
+        {% if q.ripqueue %}
+          <table class="table table-sm table-hover small">
+            <thead><tr><th>Job</th><th>Source</th><th>Copies</th><th>Submitted</th><th>RIP</th></tr></thead>
+            <tbody>
+            {% for item in q.ripqueue %}
+              <tr>
+                <td>{{ item.get('job') }}</td>
+                <td class="text-truncate" style="max-width: 260px">{{ item.get('sourcefile') }}</td>
+                <td>{{ item.get('copies') }}</td>
+                <td>{{ (item.get('submission') | int | timestamp_to_dt) if item.get('submission') else '' }}</td>
+                <td>{{ 'done' if item.get('ripfinish') else 'waiting' }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        {% else %}<p class="small text-secondary mb-2">Empty.</p>{% endif %}
+        <h2 class="h6 text-secondary">Print Queue</h2>
+        {% if q.printqueue %}
+          <table class="table table-sm table-hover small">
+            <thead><tr><th>Index</th><th>Source</th><th>Notes</th><th>Output</th><th>Size</th></tr></thead>
+            <tbody>
+            {% for item in q.printqueue %}
+              <tr>
+                <td>{{ item.get('index') }}</td>
+                <td class="text-truncate" style="max-width: 260px">{{ item.get('sourcefile') }}</td>
+                <td>{{ item.get('notes') }}</td>
+                <td>{{ item.get('output') or 0 }}</td>
+                <td>{{ item.get('width') }}"; {{ item.get('height') }}"</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        {% else %}<p class="small text-secondary mb-0">Empty.</p>{% endif %}
+      {% else %}
+        <p class="text-secondary small mb-0">Queue data unavailable.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="alert alert-warning">
+    Can't reach SoftRIP's HTTP server. Make sure <strong>ImageNET</strong> is running inside SoftRIP, then refresh.
+  </div>
+{% endif %}
+{% endblock %}
