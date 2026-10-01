@@ -26,5 +26,14 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        _ensure_column(db.engine, "jobs", "status", "VARCHAR(20) NOT NULL DEFAULT 'pending'")
 
     return app
+
+
+def _ensure_column(engine, table, column, ddl):
+    import sqlalchemy
+    insp = sqlalchemy.inspect(engine)
+    if table in insp.get_table_names() and column not in [c["name"] for c in insp.get_columns(table)]:
+        with engine.begin() as conn:
+            conn.execute(sqlalchemy.text(f'ALTER TABLE {table} ADD COLUMN {column} {ddl}'))

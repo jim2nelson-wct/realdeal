@@ -25,8 +25,16 @@
           <p class="card-text small text-secondary mb-1">
             {{ job.source_filename }} &middot; Unit {{ job.unit }} &middot; {{ job.copies }} cop{{ 'y' if job.copies == 1 else 'ies' }}
           </p>
-          <p class="card-text small text-secondary mb-2">{{ job.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+          <p class="card-text small text-secondary mb-2">{{ job.created_at.strftime('%Y-%m-%d %H:%M') }}
+            {% if job.status == 'confirmed' %}<span class="badge bg-success">confirmed</span>
+            {% elif job.status == 'failed' %}<span class="badge bg-danger">failed</span>
+            {% elif job.status == 'offline' %}<span class="badge bg-secondary">unverified</span>
+            {% else %}<span class="badge bg-warning text-dark">pending</span>{% endif %}
+          </p>
           <a class="btn btn-sm btn-outline-primary" href="{{ url_for('main.detail', job_id=job.id) }}">Open</a>
+          <form method="post" class="d-inline" action="{{ url_for('main.check', job_id=job.id) }}">
+            <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-check2-circle"></i> check</button>
+          </form>
         </div>
       </div>
     </div>

@@ -16,6 +16,11 @@
         {% endfor %}
         </tbody>
       </table>
+      <div class="mb-3" style="max-width: 560px">
+        <label class="form-label">SoftRIP hotxml.log path</label>
+        <input type="text" class="form-control" name="hotxml_log" value="{{ log_path }}">
+        <div class="form-text">Log written by SoftRIP in its wwrip home folder — used by the Logs page for debugging.</div>
+      </div>
       <button class="btn btn-primary" type="submit"><i class="bi bi-save me-1"></i>Save</button>
     </form>
   </div>

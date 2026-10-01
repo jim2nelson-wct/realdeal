@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 
+import config
 from . import db
 
 
@@ -11,6 +12,8 @@ def _new_id():
 class Job(db.Model):
     __tablename__ = "jobs"
 
+    # status lifecycle: pending -> confirmed | unknown | failed
+    status = db.Column(db.String(20), nullable=False, default="pending")
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if self.id is None:
@@ -41,3 +44,17 @@ class Hotfolder(db.Model):
 
     unit = db.Column(db.String(1), primary_key=True)
     path = db.Column(db.String(500), nullable=False)
+
+
+class LogSettings(db.Model):
+    __tablename__ = "log_settings"
+
+    id = db.Column(db.Integer, primary_key=True, default=1)
+    hotxml_log_path = db.Column(db.String(500), nullable=False, default="")
+
+    @classmethod
+    def value_or_default(cls):
+        row = cls.query.get(1)
+        if row and row.hotxml_log_path:
+            return row.hotxml_log_path
+        return config.HOTXML_LOG

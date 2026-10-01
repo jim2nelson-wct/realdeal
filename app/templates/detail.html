@@ -21,11 +21,22 @@
       <tr><th>Rotate</th><td>{{ job.rotate }}</td></tr>
       <tr><th>Scale</th><td>{{ job.scale }}%</td></tr>
       <tr><th>Mirror</th><td>{{ 'yes' if job.mirror else 'no' }}</td></tr>
+      <tr><th>Delivery</th>
+        <td>
+          {% if job.status == 'confirmed' %}<span class="badge bg-success">confirmed in RIP queue</span>
+          {% elif job.status == 'failed' %}<span class="badge bg-danger">failed to reach hot folder</span>
+          {% elif job.status == 'offline' %}<span class="badge bg-secondary">unverified (SoftRIP unreachable)</span>
+          {% else %}<span class="badge bg-warning text-dark">pending</span>{% endif %}
+        </td>
+      </tr>
       {% if job.imgconf %}<tr><th>IMGCONF</th><td>{{ job.imgconf }}</td></tr>{% endif %}
       {% if job.notes %}<tr><th>Notes</th><td>{{ job.notes }}</td></tr>{% endif %}
     </table>
     <form method="post" action="{{ url_for('main.resend', job_id=job.id) }}" class="d-inline">
       <button class="btn btn-primary" type="submit"><i class="bi bi-arrow-repeat me-1"></i>Re-send to hot folder</button>
+    </form>
+    <form method="post" action="{{ url_for('main.check', job_id=job.id) }}" class="d-inline">
+      <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-check2-circle me-1"></i>Re-check delivery</button>
     </form>
     <form method="post" action="{{ url_for('main.delete', job_id=job.id) }}" class="d-inline"
           onsubmit="return confirm('Delete this job from history?')">

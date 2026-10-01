@@ -1,5 +1,7 @@
 import config as cfg
 import json
+import os
+from collections import deque
 from pathlib import Path
 
 from flask import (
@@ -8,7 +10,7 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 from .. import db
-from ..models import Job, Hotfolder
+from ..models import Job, Hotfolder, LogSettings
 from ..rip.job_builder import WasatchXML
 from ..rip import status as rip_status
 from ..rip.status import analyze_url_or_path
@@ -96,14 +98,25 @@ def new_job():
     xml = WasatchXML(job, artwork_path)
     try:
         xml.write_atomic(folders[unit])
+        # confirmation handshake: did SoftRIP pick the job into its RIP queue?
+        job.status = rip_status.confirm_in_rip_queue(unit, str(artwork_path))
+        db.session.commit()
+        if job.status == "confirmed":
+            flash("Job submitted and confirmed in SoftRIP's RIP queue.", "success")
+        elif job.status == "offline":
+            flash("Job submitted, but SoftRIP is unreachable so delivery is unconfirmed. Use Re-check.", "warning")
+        else:
+            flash("Job submitted, but it hasn't appeared in the RIP queue yet. Use Re-check.", "warning")
     except FileNotFoundError:
+        job.status = "failed"
+        db.session.commit()
         flash("Job saved, but the hot folder path for this unit does not exist yet. "
-              "Set it on the Settings page and use Re-send.", "warning")
+              "Set it on the Settings page and use Re-send.", "danger")
     except Exception:
+        job.status = "failed"
+        db.session.commit()
         current_app.logger.exception("Hot folder submission failed")
-        flash("Job saved, but writing to the hot folder failed. Use Re-send once fixed.", "warning")
-
-    flash("Job submitted to hot folder.", "success")
+        flash("Job saved, but writing to the hot folder failed. Use Re-send once fixed.", "danger")
     return redirect(url_for("main.index"))
 
 
@@ -129,23 +142,80 @@ def rip_status_page():
     return render_template("status.html", system=system, queues=queues)
 
 
+@bp.route("/jobs/<job_id>/check", methods=["POST"])
+def check(job_id):
+    job = Job.query.get_or_404(job_id)
+    artwork_path = cfg.UPLOAD_DIR / job.id / job.source_filename
+    if not artwork_path.exists():
+        flash("Artwork file is missing on disk; cannot verify.", "danger")
+        return redirect(url_for("main.detail", job_id=job.id))
+    result = rip_status.confirm_in_rip_queue(job.unit, str(artwork_path), attempts=4, delay=0.5)
+    if result != "offline":
+        job.status = result
+        db.session.commit()
+    msg = {
+        "confirmed": "Job is confirmed in SoftRIP's RIP queue.",
+        "pending": "Job was not found in the RIP queue yet.",
+        "offline": "SoftRIP is unreachable; status unchanged.",
+    }[result]
+    flash(msg, "success" if result == "confirmed" else "warning")
+    return redirect(url_for("main.detail", job_id=job.id))
+
+
+@bp.route("/logs")
+def logs():
+    log_path = LogSettings.value_or_default()
+    tail = ""
+    exists = bool(log_path) and os.path.exists(log_path)
+    if exists:
+        try:
+            lines = int(request.args.get("lines", 100))
+        except ValueError:
+            lines = 100
+        lines = max(1, min(lines, 2000))
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            deque_tail = deque(f, maxlen=lines)
+        tail = "".join(deque_tail)
+    return render_template("logs.html", log_path=log_path,
+                           exists=exists, tail=tail,
+                           lines=request.args.get("lines", 100),
+                           refresh=request.args.get("refresh", ""))
+
+
+@bp.route("/api/logs")
+def api_logs():
+    log_path = LogSettings.value_or_default()
+    if not log_path or not os.path.exists(log_path):
+        return {"exists": False, "tail": ""}
+    try:
+        lines = int(request.args.get("lines", 100))
+    except ValueError:
+        lines = 100
+    lines = max(1, min(lines, 2000))
+    with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+        tail = "".join(deque(f, maxlen=lines))
+    return {"exists": True, "tail": tail}
+
+
 @bp.route("/settings", methods=["GET", "POST"])
 def settings():
-    default_paths = dict(cfg.HOTFOLDERS)
     if request.method == "POST":
-        for unit in default_paths:
+        for unit in dict(cfg.HOTFOLDERS):
             path = request.form.get(f"path_{unit}", "").strip()
             if path != "":
                 row = Hotfolder.query.get(unit) or Hotfolder(unit=unit, path=path)
-                if not row.path:
-                    row.path = path
                 row.path = path
                 db.session.add(row)
+        log_path = request.form.get("hotxml_log", "").strip()
+        row = LogSettings.query.get(1) or LogSettings(id=1, hotxml_log_path=log_path)
+        row.hotxml_log_path = log_path
+        db.session.add(row)
         db.session.commit()
-        flash("Hot folder paths saved.", "success")
+        flash("Settings saved.", "success")
         return redirect(url_for("main.settings"))
     current = unit_folders()
-    return render_template("settings.html", folders=current)
+    log_path = LogSettings.value_or_default()
+    return render_template("settings.html", folders=current, log_path=log_path)
 
 
 @bp.route("/jobs/<job_id>/resend", methods=["POST"])

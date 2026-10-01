@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Logs{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">SoftRIP hotxml.log</h1>
+  <div>
+    <form method="get" class="d-inline">
+      <select class="form-select form-select-sm d-inline w-auto" name="lines">
+        {% for n in (50, 100, 200, 500) %}<option {{ 'selected' if request.args.get('lines', '100') == n|string }}>{{ n }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-sm btn-outline-secondary">Show</button>
+      <label class="form-check-label ms-2 small">Auto-refresh</label>
+      <input type="checkbox" class="form-check-input" id="autorefresh" {{ 'checked' if refresh }}>
+    </form>
+    <button class="btn btn-sm btn-outline-secondary" onclick="window.location='{{ url_for('main.logs', lines=lines) }}'">
+      <i class="bi bi-arrow-clockwise"></i>
+    </button>
+  </div>
+</div>
+{% if exists %}
+  <pre class="border rounded p-3 bg-black text-light" id="logtail"
+      style="max-height: 70vh; overflow-y: auto; font-size: .8rem; white-space: pre-wrap;">{{ tail }}</pre>
+{% else %}
+  <div class="alert alert-warning">Log file not found at <code>{{ log_path }}</code>. Set the correct path on the Settings page.</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if refresh %}
+<script>setTimeout(() => location.reload(), 5000);</script>
+{% endif %}
+{% endblock %}

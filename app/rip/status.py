@@ -1,4 +1,6 @@
 import logging
+import os
+import time
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 
@@ -18,6 +20,21 @@ def _get(path: str, params: dict | None = None):
     except requests.RequestException as e:
         logger.warning("SoftRIP HTTP request failed: %s (%s)", path, e)
         return None
+
+
+def confirm_in_rip_queue(unit: str, artwork_path: str, attempts: int = 6, delay: float = 1.0) -> str:
+    """Poll the RIP queue watch for our source file. One of 'confirmed'|'offline'|'pending'."""
+    target = os.path.normcase(os.path.normpath(artwork_path))
+    for _ in range(max(1, attempts)):
+        q = get_queue(unit)
+        if not q["available"]:
+            return "offline"
+        for item in q["ripqueue"]:
+            src = item.get("sourcefile") or ""
+            if os.path.normcase(os.path.normpath(src)) == target:
+                return "confirmed"
+        time.sleep(delay)
+    return "pending"
 
 
 def _parse(xml_text: str) -> ET.Element | None:
