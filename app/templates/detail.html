@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ job.name }}{% endblock %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-md-4">
+    {% if job.thumb_filename %}
+      <img class="img-fluid border rounded" src="{{ url_for('main.upload_thumb', job_id=job.id) }}" alt="preview">
+    {% else %}
+      <div class="border rounded bg-secondary-subtle d-flex align-items-center justify-content-center" style="height: 260px;">
+        <i class="bi bi-file-earmark-arrow-up fs-1 text-secondary"></i>
+      </div>
+    {% endif %}
+  </div>
+  <div class="col-md-8">
+    <h1 class="h3">{{ job.name }}</h1>
+    <table class="table table-sm">
+      <tr><th>File</th><td>{{ job.source_filename }}</td></tr>
+      <tr><th>Created</th><td>{{ job.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+      <tr><th>Unit</th><td>{{ job.unit }}</td></tr>
+      <tr><th>Copies</th><td>{{ job.copies }}</td></tr>
+      <tr><th>Rotate</th><td>{{ job.rotate }}</td></tr>
+      <tr><th>Scale</th><td>{{ job.scale }}%</td></tr>
+      <tr><th>Mirror</th><td>{{ 'yes' if job.mirror else 'no' }}</td></tr>
+      {% if job.imgconf %}<tr><th>IMGCONF</th><td>{{ job.imgconf }}</td></tr>{% endif %}
+      {% if job.notes %}<tr><th>Notes</th><td>{{ job.notes }}</td></tr>{% endif %}
+    </table>
+    <form method="post" action="{{ url_for('main.resend', job_id=job.id) }}" class="d-inline">
+      <button class="btn btn-primary" type="submit"><i class="bi bi-arrow-repeat me-1"></i>Re-send to hot folder</button>
+    </form>
+    <form method="post" action="{{ url_for('main.delete', job_id=job.id) }}" class="d-inline"
+          onsubmit="return confirm('Delete this job from history?')">
+      <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash me-1"></i>Delete</button>
+    </form>
+  </div>
+</div>
+<h2 class="h5 mt-4">Generated XML</h2>
+<pre class="border rounded p-3 bg-black text-light">{{ xml }}</pre>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-9">
+    <h1 class="h3 mb-3">Settings</h1>
+    <form method="post" class="card p-3">
+      <table class="table align-middle">
+        <thead><tr><th>Unit</th><th>Hot folder path</th></tr></thead>
+        <tbody>
+        {% for unit, path in folders.items() %}
+          <tr>
+            <td class="fw-bold">{{ unit }}</td>
+            <td><input type="text" class="form-control" name="path_{{ unit }}" value="{{ path }}"></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-save me-1"></i>Save</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

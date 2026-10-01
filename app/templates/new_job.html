@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}New Job{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3">New Print Job</h1>
+<form method="post" enctype="multipart/form-data" class="card p-3" style="max-width: 720px">
+  <div class="mb-3">
+    <label class="form-label">Artwork file</label>
+    <input type="file" class="form-control" name="artwork" required>
+    <div class="form-text">Accepted: PDF, PS, EPS, TIFF, JPG, PNG, BMP, GIF, PSD</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Job name</label>
+    <input type="text" class="form-control" name="name" placeholder="e.g. Banner for Acme" required>
+  </div>
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+      <label class="form-label">Print unit</label>
+      <select class="form-select" name="unit">
+        <option value="1" selected>1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+      </select>
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label">Copies</label>
+      <input type="number" class="form-control" name="copies" value="1" min="0" max="9999">
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label">Rotate</label>
+      <select class="form-select" name="rotate">
+        <option value="0">None</option><option value="90">90&deg;</option>
+        <option value="180">180&deg;</option><option value="270">270&deg;</option>
+      </select>
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label">Mirror</label>
+      <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="mirror"><label class="form-check-label">On</label></div>
+    </div>
+  </div>
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+      <label class="form-label">Scale %</label>
+      <input type="number" class="form-control" name="scale" value="100" min="1" max="1000">
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label">PDF page</label>
+      <input type="number" class="form-control" name="pageno" value="" min="1" placeholder="(all/1)">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Imaging config</label>
+      <input type="text" class="form-control" name="imgconf" placeholder="optional IMGCONF name">
+    </div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Notes</label>
+    <input type="text" class="form-control" name="notes" placeholder="internal notes, not sent to SoftRIP">
+  </div>
+  <div class="form-check form-check-inline mb-3">
+    <input class="form-check-input" type="checkbox" name="delete_after_rip">
+    <label class="form-check-label">DELETEAFTERRIP</label>
+  </div>
+  <div class="form-check form-check-inline mb-3">
+    <input class="form-check-input" type="checkbox" name="delete_after_print">
+    <label class="form-check-label">DELETEAFTERPRINT</label>
+  </div>
+  <div>
+    <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Submit to hot folder</button>
+  </div>
+</form>
+{% endblock %}

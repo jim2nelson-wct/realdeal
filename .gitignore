@@ -17,6 +17,11 @@ venv/
 .coverage
 htmlcov/
 
+# Application data (uploads, generated jobs, database)
+uploads/
+jobs/
+instance/
+
 # Environment / secrets
 .env
 *.env
