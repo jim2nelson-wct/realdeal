@@ -5,6 +5,8 @@
   .unit-card > .card-header {
     background-color: #B0E0A8;
     color: #111;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
   }
   .unit-card .table-hover > tbody > tr:hover > * {
     background-color: #cfe2ff;
@@ -12,10 +14,14 @@
     box-shadow: none;
     --bs-table-color-state: #111;
   }
+  .unit-card .queue-heading.card-body h2,
+  .card-body h2.queue-heading {
+    color: #0d6efd;
+  }
 </style>
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="h3 mb-0">SoftRIP Status</h1>
-  <span class="badge {{ 'bg-success' if system.online else 'bg-danger' }}">
+  <span class="badge fs-5 {{ 'bg-success' if system.online else 'bg-danger' }}">
     {{ 'Online' if system.online else 'Offline' }}
   </span>
 </div>
@@ -31,7 +37,7 @@
     </div>
     <div class="card-body">
       {% if q.available %}
-        <h2 class="h6 text-secondary">RIP Queue</h2>
+        <h2 class="h6 queue-heading">RIP Queue</h2>
         {% if q.ripqueue %}
           <table class="table table-sm table-hover small">
             <thead><tr><th>Job</th><th>Source</th><th>Copies</th><th>Submitted</th><th>RIP</th></tr></thead>
@@ -48,7 +54,7 @@
             </tbody>
           </table>
         {% else %}<p class="small text-secondary mb-2">Empty.</p>{% endif %}
-        <h2 class="h6 text-secondary">Print Queue</h2>
+        <h2 class="h6 queue-heading">Print Queue</h2>
         {% if q.printqueue %}
           <table class="table table-sm table-hover small">
             <thead><tr><th>Index</th><th>Source</th><th>Notes</th><th>Output</th><th>Size</th></tr></thead>

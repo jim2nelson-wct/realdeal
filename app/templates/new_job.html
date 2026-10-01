@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}New Job{% endblock %}
 {% block content %}
+<style>
+  input[type="file"].form-control::file-selector-button {
+    background-color: #cfe2ff;
+    color: #111;
+  }
+</style>
 <h1 class="h3 mb-3">New Print Job</h1>
 <form method="post" enctype="multipart/form-data" class="card p-3" style="max-width: 720px">
   <div class="mb-3">
@@ -9,12 +15,12 @@
     <div class="form-text">Accepted: PDF, PS, EPS, TIFF, JPG, PNG, BMP, GIF, PSD</div>
   </div>
   <div class="mb-3">
-    <label class="form-label">Job name</label>
+    <label class="form-label">Job Name</label>
     <input type="text" class="form-control" name="name" placeholder="e.g. Banner for Acme" required>
   </div>
   <div class="row g-3 mb-3">
     <div class="col-6 col-md-3">
-      <label class="form-label">Print unit</label>
+      <label class="form-label">Print Unit</label>
       <select class="form-select" name="unit">
         <option value="1" selected>1</option>
         <option value="2">2</option>
@@ -48,7 +54,7 @@
       <input type="number" class="form-control" name="pageno" value="" min="1" placeholder="(all/1)">
     </div>
     <div class="col-md-6">
-      <label class="form-label">Imaging config</label>
+      <label class="form-label">Imaging Config</label>
       <input type="text" class="form-control" name="imgconf" id="imgconf" list="imgconf_list" placeholder="leave blank for unit default">
       <datalist id="imgconf_list"></datalist>
       <div class="form-text" id="imgconf_hint">select a print unit to load configs from SoftRIP</div>
@@ -60,7 +66,7 @@
   </div>
   <div class="row g-3 mb-3">
     <div class="col-6 col-md-3">
-      <label class="form-label">Cut outline</label>
+      <label class="form-label">Cut Outline</label>
       <select class="form-select" name="cut_enabled" id="cut_enabled">
         <option value="">None</option><option value="1">Generate</option>
       </select>
@@ -70,7 +76,7 @@
       <input type="number" step="0.25" class="form-control" name="cut_bleed" value="0.25" id="cut_bleed" disabled>
     </div>
     <div class="col-6 col-md-3">
-      <label class="form-label">Corner radius (in)</label>
+      <label class="form-label">Corner Radius (in)</label>
       <input type="number" step="0.25" class="form-control" name="cut_radius" value="0" min="0" step="0.25" id="cut_radius" disabled>
     </div>
   </div>
