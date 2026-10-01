@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ layout.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">{{ layout.name }}</h1>
+  <div>
+    <form method="post" action="{{ url_for('main.layout_send', layout_id=layout.id) }}" class="d-inline">
+      <button class="btn btn-primary"><i class="bi bi-send me-1"></i>Send to hot folder</button>
+    </form>
+    <a class="btn btn-outline-secondary" href="{{ url_for('main.layouts') }}">Back to layouts</a>
+  </div>
+</div>
+<p class="small text-secondary">
+  Unit {{ layout.unit }} &middot; {{ layout.copies }} cop{{ 'y' if layout.copies == 1 else 'ies' }}
+  {% if layout.status == 'confirmed' %} &middot; <span class="badge bg-success">confirmed in RIP queue</span>
+  {% elif layout.status == 'failed' %} &middot; <span class="badge bg-danger">failed</span>
+  {% else %} &middot; <span class="badge bg-warning text-dark">not yet confirmed</span>{% endif %}
+  {% if layout.notes %} &middot; notes: {{ layout.notes }}{% endif %}
+</p>
+<table class="table table-hover align-middle">
+  <thead><tr><th>#</th><th>Job</th><th>File</th><th>X (in)</th><th>Y (in)</th><th>Rotate</th></tr></thead>
+  <tbody>
+  {% for item in items %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>{{ item.job.name }}</td>
+      <td class="text-truncate" style="max-width:220px">{{ item.job.source_filename }}</td>
+      <td>{{ '{:g}'.format(item.xposition) }}</td>
+      <td>{{ '{:g}'.format(item.yposition) }}</td>
+      <td>{{ item.rotate }}&deg;</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<h2 class="h5 mt-4">Generated XML</h2>
+<pre class="border rounded p-3 bg-black text-light">{{ xml }}</pre>
+{% endblock %}

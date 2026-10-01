@@ -30,6 +30,7 @@
         </td>
       </tr>
       {% if job.imgconf %}<tr><th>IMGCONF</th><td>{{ job.imgconf }}</td></tr>{% endif %}
+      {% if job.cut_bleed is not none %}<tr><th>Cut outline</th><td>bleed {{ '{:g}'.format(job.cut_bleed) }}", radius {{ '{:g}'.format(job.cut_radius) }}"</td></tr>{% endif %}
       {% if job.notes %}<tr><th>Notes</th><td>{{ job.notes }}</td></tr>{% endif %}
     </table>
     <form method="post" action="{{ url_for('main.resend', job_id=job.id) }}" class="d-inline">

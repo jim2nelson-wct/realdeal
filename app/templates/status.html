@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 {% block title %}SoftRIP Status{% endblock %}
 {% block content %}
+<style>
+  .unit-card > .card-header {
+    background-color: #B0E0A8;
+    color: #111;
+  }
+  .unit-card .table-hover > tbody > tr:hover > * {
+    background-color: #cfe2ff;
+    color: #111;
+    box-shadow: none;
+    --bs-table-color-state: #111;
+  }
+</style>
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="h3 mb-0">SoftRIP Status</h1>
   <span class="badge {{ 'bg-success' if system.online else 'bg-danger' }}">
@@ -13,7 +25,7 @@
   </p>
   {% for unit in system.units %}
   {% set q = queues[unit.number] %}
-  <div class="card mb-3">
+  <div class="card mb-3 unit-card">
     <div class="card-header d-flex justify-content-between">
       <span><strong>Unit {{ unit.number }}</strong> — {{ unit.name or 'Not configured' }}</span>
     </div>

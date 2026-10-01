@@ -10,8 +10,8 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 from .. import db
-from ..models import Job, Hotfolder, LogSettings
-from ..rip.job_builder import WasatchXML
+from ..models import Job, Layout, LayoutItem, Hotfolder, LogSettings
+from ..rip.job_builder import WasatchXML, WasatchLayoutXML
 from ..rip import status as rip_status
 from ..rip.status import analyze_url_or_path
 from ..thumbs import make_thumb
@@ -70,6 +70,11 @@ def new_job():
         delete_after_rip=bool(request.form.get("delete_after_rip")),
         delete_after_print=bool(request.form.get("delete_after_print")),
     )
+    bleed = request.form.get("cut_bleed", "").strip()
+    radius = request.form.get("cut_radius", "").strip()
+    if request.form.get("cut_enabled") == "1" and bleed != "":
+        job.cut_bleed = float(bleed)
+        job.cut_radius = float(radius) if radius != "" else 0.0
     job.source_filename = secure_filename(uploaded.filename)
     ext = Path(job.source_filename).suffix.lower()
     job.source_ext = ext
@@ -195,6 +200,105 @@ def api_logs():
     with open(log_path, "r", encoding="utf-8", errors="replace") as f:
         tail = "".join(deque(f, maxlen=lines))
     return {"exists": True, "tail": tail}
+
+
+@bp.route("/layouts")
+def layouts():
+    rows = Layout.query.order_by(Layout.created_at.desc()).all()
+    return render_template("layouts.html", layouts=rows)
+
+
+@bp.route("/layouts/new", methods=["GET"])
+def layout_new():
+    jobs = Job.query.order_by(Job.created_at.desc()).all()
+    return render_template("layout_new.html", jobs=jobs)
+
+
+@bp.route("/layouts", methods=["POST"])
+def layout_create():
+    try:
+        copies = int(request.form.get("copies", 1) or 1)
+    except ValueError:
+        copies = 1
+    unit = request.form.get("unit", "1")
+    if unit not in unit_folders():
+        flash("Unknown print unit.", "danger")
+        return redirect(url_for("main.layout_new"))
+
+    layout = Layout(
+        name=request.form.get("name", "").strip() or "Layout",
+        notes=request.form.get("notes", "").strip(),
+        unit=unit,
+        copies=copies,
+    )
+    db.session.add(layout)
+
+    job_ids = request.form.getlist("job_id")
+    xs = request.form.getlist("x")
+    ys = request.form.getlist("y")
+    rots = request.form.getlist("rot")
+    kept = 0
+    for job_id, x, y, rot in zip(job_ids, xs, ys, rots):
+        if not job_id:
+            continue
+        try:
+            item = LayoutItem(
+                layout_id=layout.id,
+                job_id=job_id,
+                xposition=float(x or 0),
+                yposition=float(y or 0),
+                rotate=int(rot or 0),
+            )
+            db.session.add(item)
+            kept += 1
+        except (TypeError, ValueError):
+            continue
+    db.session.commit()
+    if kept == 0:
+        db.session.delete(layout)
+        db.session.commit()
+        flash("Add at least one artwork page to the layout.", "danger")
+        return redirect(url_for("main.layout_new"))
+    return redirect(url_for("main.layout_detail", layout_id=layout.id))
+
+
+@bp.route("/layouts/<layout_id>")
+def layout_detail(layout_id):
+    layout = Layout.query.get_or_404(layout_id)
+    items = LayoutItem.query.filter_by(layout_id=layout.id).order_by(LayoutItem.id).all()
+    arts = [(it, cfg.UPLOAD_DIR / it.job.id / it.job.source_filename) for it in items]
+    xml = WasatchLayoutXML(layout, arts).to_xml()
+    return render_template("layout_detail.html", layout=layout, items=items, xml=xml)
+
+
+@bp.route("/layouts/<layout_id>/send", methods=["POST"])
+def layout_send(layout_id):
+    layout = Layout.query.get_or_404(layout_id)
+    items = LayoutItem.query.filter_by(layout_id=layout.id).all()
+    arts = [(it, cfg.UPLOAD_DIR / it.job.id / it.job.source_filename) for it in items]
+    if any(not art.exists() for _, art in arts):
+        flash("Some artwork files referenced by this layout are missing on disk.", "danger")
+        return redirect(url_for("main.layout_detail", layout_id=layout.id))
+    folders = unit_folders()
+    try:
+        WasatchLayoutXML(layout, arts).write_atomic(folders[layout.unit])
+        layout.status = rip_status.confirm_in_rip_queue(layout.unit, str(arts[0][1]))
+        db.session.commit()
+        flash("Layout submitted to hot folder.", "success")
+    except Exception:
+        current_app.logger.exception("Layout submission failed")
+        flash("Layout submission failed. Check the hot folder path in Settings.", "danger")
+    return redirect(url_for("main.layout_detail", layout_id=layout.id))
+
+
+@bp.route("/layouts/<layout_id>/delete", methods=["POST"])
+def layout_delete(layout_id):
+    layout = Layout.query.get_or_404(layout_id)
+    LayoutItem.query.filter_by(layout_id=layout.id).delete()
+    db.session.delete(layout)
+    db.session.commit()
+    flash("Layout deleted from history.", "success")
+    return redirect(url_for("main.layouts"))
 
 
 @bp.route("/settings", methods=["GET", "POST"])

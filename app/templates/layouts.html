@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Layouts{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Layouts</h1>
+  <a class="btn btn-primary" href="{{ url_for('main.layout_new') }}"><i class="bi bi-plus-lg me-1"></i>New Layout</a>
+</div>
+{% if not layouts %}
+  <div class="text-center text-secondary py-5">
+    <i class="bi bi-grid-1x2 fs-1 d-block mb-2"></i><p>No layouts yet.</p>
+  </div>
+{% else %}
+  <table class="table table-hover align-middle">
+    <thead><tr><th>Name</th><th>Unit</th><th>Copies</th><th>Created</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for layout in layouts %}
+      <tr>
+        <td><a href="{{ url_for('main.layout_detail', layout_id=layout.id) }}" class="text-decoration-none">{{ layout.name }}</a></td>
+        <td>{{ layout.unit }}</td><td>{{ layout.copies }}</td>
+        <td>{{ layout.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>
+          {% if layout.status == 'confirmed' %}<span class="badge bg-success">confirmed</span>
+          {% elif layout.status == 'failed' %}<span class="badge bg-danger">failed</span>
+          {% else %}<span class="badge bg-warning text-dark">pending</span>{% endif %}
+        </td>
+        <td>
+          <form method="post" action="{{ url_for('main.layout_delete', layout_id=layout.id) }}" onsubmit="return confirm('Delete this layout?')">
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+{% endblock %}

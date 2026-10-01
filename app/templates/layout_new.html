@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}New Layout{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3">New Layout</h1>
+{% if not jobs %}
+  <div class="alert alert-secondary">You need at least one job with artwork before building a layout.
+    <a href="{{ url_for('main.new_job') }}">Create a job</a> first.</div>
+{% endif %}
+<form method="post" action="{{ url_for('main.layout_create') }}" class="card p-3" style="max-width: 860px">
+  <div class="row g-3 mb-3">
+    <div class="col-md-4"><label class="form-label">Layout name</label>
+      <input type="text" class="form-control" name="name" placeholder="e.g. Two-up banner" required></div>
+    <div class="col-md-3"><label class="form-label">Unit</label>
+      <select class="form-select" name="unit"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></div>
+    <div class="col-md-3"><label class="form-label">Copies</label>
+      <input type="number" class="form-control" name="copies" value="1" min="1" max="999"></div>
+    <div class="col-md-2 mt-4"><input type="submit" class="btn btn-primary"></div>
+  </div>
+  <div class="mb-3"><label class="form-label">Notes (optional, show in SoftRIP queue)</label>
+    <input type="text" class="form-control" name="notes"></div>
+  <div class="mb-3">
+    <label class="form-label">Pages (choose artworks, set position offsets in inches)</label>
+    <div class="col-12 mt-2">
+      {% for job in jobs %}
+      <div class="row g-2 align-items-end mb-1 layout-row" data-job="{{ job.id }}">
+        <div class="col-md-5 form-check ms-2">
+          <input class="form-check-input job-check" type="checkbox" name="job_id" value="{{ job.id }}">
+          <label class="form-check-label">{{ job.name }} <span class="text-secondary">({{ job.source_filename }})</span></label>
+        </div>
+        <div class="col-2"><label class="form-label small mb-1">X (in)</label>
+          <input type="number" step="0.25" class="form-control form-control-sm pos-input" name="x" value="0"></div>
+        <div class="col-2"><label class="form-label small mb-1">Y (in)</label>
+          <input type="number" step="0.25" class="form-control form-control-sm pos-input" name="y" value="0"></div>
+        <div class="col-2"><label class="form-label small mb-1">Rotate</label>
+          <select class="form-select form-select-sm" name="rot"><option value="0">0</option><option value="90">90</option><option value="180">180</option><option value="270">270</option></select></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('.job-check').forEach(cb => {
+  cb.addEventListener('change', () => {
+    const row = cb.closest('.layout-row');
+    row.querySelectorAll('.pos-input, select').forEach(el => el.disabled = !cb.checked);
+    if (!cb.checked) { row.querySelectorAll('.pos-input').forEach(el => el.value = 0); }
+  });
+  cb.dispatchEvent(new Event('change'));
+});
+</script>
+{% endblock %}

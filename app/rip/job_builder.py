@@ -33,6 +33,11 @@ class WasatchXML:
             lines.append('    <Mirror>1</Mirror>')
         if j.imgconf:
             lines.append(f'    <IMGCONF>{_esc(j.imgconf)}</IMGCONF>')
+        if j.cut_bleed is not None:
+            attrs = f' Bleed={j.cut_bleed}'
+            if j.cut_radius:
+                attrs += f' Cornerradius={j.cut_radius}'
+            lines.append(f'    <Cutoutline{attrs}></Cutoutline>')
         if j.delete_after_rip:
             lines.append('    <DELETEAFTERRIP />')
         if j.delete_after_print:
@@ -78,3 +83,59 @@ def _tag_open(name: str, attrs: dict) -> str:
 def _safe_name(text: str) -> str:
     keep = [c if c.isalnum() or c in '-_' else '_' for c in text]
     return ''.join(keep)[:80] or 'job'
+
+
+class WasatchLayoutXML:
+    """Builds a <LAYOUT> of existing jobs, positioned in inches."""
+
+    def __init__(self, layout, items):
+        self.layout = layout
+        self.items = items  # list of (LayoutItem, artwork Path)
+
+    def to_xml(self) -> str:
+        lay, items = self.layout, self.items
+        lines = ['<?xml version="1.0" encoding="utf-8"?>', '<WASATCH ACTION=JOB>']
+        attrs = ''
+        if lay.notes:
+            attrs = f' NOTES={_esc(lay.notes)}'
+        lines.append(f'  <LAYOUT{attrs}>')
+        lines.append(f'    <Copies>{lay.copies or 1}</Copies>')
+        for item, art in items:
+            j = item.job
+            page_attrs = {'XPOSITION': f'{item.xposition:g}', 'YPOSITION': f'{item.yposition:g}'}
+            lines.append('    ' + _tag_open('PAGE', page_attrs))
+            lines.append(f'      <FileName>{_esc(str(art))}</FileName>')
+            if item.rotate:
+                lines.append(f'      <Rotate>{item.rotate}</Rotate>')
+            if j.cut_bleed is not None:
+                cut = f' Bleed={j.cut_bleed}'
+                if j.cut_radius:
+                    cut += f' Cornerradius={j.cut_radius}'
+                lines.append(f'      <Cutoutline{cut}></Cutoutline>')
+            # page copies zero: layout copies drive output
+            lines.append('      <Copies>0</Copies>')
+            lines.append('    </PAGE>')
+        lines.append('  </LAYOUT>')
+        lines.append('</WASATCH>')
+        return '\n'.join(lines)
+
+    def write_atomic(self, hotfolder_path: str) -> Path:
+        dest = Path(hotfolder_path)
+        dest.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime('%Y%m%d_%H%M%S')
+        filename = f'{stamp}_layout_{_safe_name(self.layout.name)}.xml'
+        fd, tmp = tempfile.mkstemp(prefix=filename + '.', suffix='.tmp', dir=str(dest))
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(self.to_xml())
+                f.flush()
+                os.fsync(f.fileno())
+            final = dest / filename
+            os.replace(tmp, final)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+        return final

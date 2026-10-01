@@ -27,6 +27,8 @@ def create_app():
     with app.app_context():
         db.create_all()
         _ensure_column(db.engine, "jobs", "status", "VARCHAR(20) NOT NULL DEFAULT 'pending'")
+        _ensure_column(db.engine, "jobs", "cut_bleed", "FLOAT")
+        _ensure_column(db.engine, "jobs", "cut_radius", "FLOAT DEFAULT 0.0")
 
     return app
 
