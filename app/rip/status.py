@@ -8,6 +8,9 @@ import requests
 
 from .status_config import SOFRIP_HTTP_URL, SOFRIP_HTTP_TIMEOUT
 
+__all__ = ["SOFRIP_HTTP_URL", "SOFRIP_HTTP_TIMEOUT", "get_system", "get_imgconfs",
+           "get_queue", "analyze_url_or_path", "confirm_in_rip_queue"]
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,18 +49,25 @@ def _parse(xml_text: str) -> ET.Element | None:
 
 
 def get_system() -> dict:
-    """Returns {'online': bool, 'name': str, 'serial': str, 'units': [{'number','name'}]}"""
+    """Returns {'online': bool, 'name': str, 'serial': str, 'qpa': bool, 'units': [...]}"""
     resp = _get("xmlSystem.dyn")
     if resp is None:
-        return {"online": False, "name": None, "serial": None, "units": []}
+        return {"online": False, "name": None, "serial": None, "qpa": None, "units": []}
     root = _parse(resp.text)
     if root is None:
-        return {"online": True, "name": None, "serial": None, "units": []}
+        return {"online": True, "name": None, "serial": None, "qpa": None, "units": []}
     units = [
         {"number": u.get("number"), "name": u.get("name")}
         for u in root.findall("PRINTUNIT")
     ]
-    return {"online": True, "name": root.get("name"), "serial": root.get("sn"), "units": units}
+    qpa_attr = root.get("qpa")
+    return {
+        "online": True,
+        "name": root.get("name"),
+        "serial": root.get("sn"),
+        "qpa": None if qpa_attr is None else qpa_attr.lower() == "true",
+        "units": units,
+    }
 
 
 def get_imgconfs(unit: str) -> list[str]:

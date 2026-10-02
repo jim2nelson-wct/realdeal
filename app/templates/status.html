@@ -14,72 +14,201 @@
     box-shadow: none;
     --bs-table-color-state: #111;
   }
-  .unit-card .queue-heading.card-body h2,
-  .card-body h2.queue-heading {
-    color: #0d6efd;
-  }
+  .queue-heading { color: #0d6efd; }
+  .thumb-30 { height: 30px; width: auto; }
+  .thumb-60 { height: 60px; width: auto; }
+  .thumb-90 { height: 90px; width: auto; }
 </style>
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
   <h1 class="h3 mb-0">SoftRIP Status</h1>
-  <span class="badge fs-5 {{ 'bg-success' if system.online else 'bg-danger' }}">
-    {{ 'Online' if system.online else 'Offline' }}
-  </span>
+  <div class="d-flex gap-2 align-items-center">
+    <select class="form-select form-select-sm" id="unit-filter" style="width:auto">
+      <option value="">All units</option>
+    </select>
+    <select class="form-select form-select-sm" id="queue-filter" style="width:auto">
+      <option value="both">Both queues</option>
+      <option value="rip">RIP only</option>
+      <option value="print">Print only</option>
+    </select>
+    <select class="form-select form-select-sm" id="thumb-size" style="width:auto">
+      <option value="30">30px</option><option value="60" selected>60px</option><option value="90">90px</option>
+    </select>
+    <button class="btn btn-sm btn-outline-secondary" id="btn-refresh"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+  </div>
 </div>
-{% if system.online %}
-  <p class="text-secondary small">
-    {{ system.name or 'Wasatch SoftRIP' }}{% if system.serial %} &middot; SN {{ system.serial }}{% endif %} &middot; talks to SoftRIP's ImageNET server at localhost
-  </p>
-  {% for unit in system.units %}
-  {% set q = queues[unit.number] %}
-  <div class="card mb-3 unit-card">
+<div class="mb-2">
+  <span class="badge fs-5" id="online-pill">checking…</span>
+  <span class="badge fs-5{{ ' ms-2' }}" id="qpa-pill" hidden></span>
+  <span class="small text-secondary ms-2" id="sysinfo"></span>
+</div>
+<div class="alert alert-warning alert-dismissible fade show" id="err" hidden>
+  Cannot reach Wasatch SoftRIP — is it running with ImageNET / Automation enabled?
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<div id="units"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const POLL_SECONDS = 10;
+const $ = id => document.getElementById(id);
+const esc = s => { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; };
+const qFilter = () => $('queue-filter').value;
+const uFilter = () => $('unit-filter').value;
+const thumbCls = () => 'thumb-' + $('thumb-size').value;
+
+const fmt = ts => ts && Number.isFinite(+ts) ? new Date(+ts * 1000).toLocaleTimeString() : '';
+
+function ripRow(item) {
+  const u = item.unit;
+  return `<tr class="unit-row" data-unit="${u}">
+    <td><img class="${thumbCls()} lazy-thumb" loading="lazy" src="/thumb/rip/${u}/${esc(item.job)}.png"
+         onerror="this.style.display='none'"></td>
+    <td>${esc(item.job)}</td>
+    <td>${item.ripfinish ? '✔' : '—'}</td>
+    <td>${esc(item.copies)}</td>
+    <td>${esc(fmt(item.submission))}</td>
+    <td>${esc(fmt(item.ripstart))}</td>
+    <td>${esc(fmt(item.ripfinish))}</td>
+    <td class="text-truncate" style="max-width:240px" title="${esc(item.sourcefile)}">${esc(item.sourcefile)}</td>
+  </tr>`;
+}
+
+function prtRow(item) {
+  const u = item.unit;
+  return `<tr class="unit-row" data-unit="${u}">
+    <td><img class="${thumbCls()} lazy-thumb" loading="lazy" src="/thumb/prt/${u}/${esc(item.index)}.png"
+         onerror="this.style.display='none'"></td>
+    <td>${esc(item.index)}</td>
+    <td class="text-truncate" style="max-width:200px">${esc(item.notes)}</td>
+    <td>${item.layout === 'true' ? '✔' : '—'}</td>
+    <td>${esc(item.width || '?')} × ${esc(item.height || '?')}"</td>
+    <td class="text-truncate" style="max-width:180px">${esc(item.imgconf || '')}</td>
+    <td>${esc(item.output || 0)}</td>
+  </tr>`;
+}
+
+const RIP_COLS = ['Thumb', 'Job', 'Ripped', 'Copies', 'Submitted', 'RIP start', 'RIP finish', 'Source'];
+const PRT_COLS = ['Thumb', 'Index', 'Notes', 'Layout', 'Size (in)', 'Imaging config', 'Copies printed'];
+const RIP_KEYS = ['thumb', 'job', 'rip', 'copies', 'submission', 'ripstart', 'ripfinish', 'sourcefile'];
+const PRT_KEYS = ['thumb', 'index', 'notes', 'layout', 'size', 'imgconf', 'output'];
+
+function table(cols, rowsHtml, empty, keys) {
+  const thead = cols.map((c, i) => `<th data-col="${keys[i]}">${c}</th>`).join('');
+  return `<table class="table table-sm table-hover small mt-1">
+    <thead><tr>${thead}</tr></thead>
+    <tbody>${rowsHtml.length || `<tr><td colspan="${cols.length}" class="text-secondary fst-italic">${empty}</td></tr>`}
+    </tbody></table>`;
+}
+
+function applyFilters() {
+  const u = uFilter(), q = qFilter();
+  document.querySelectorAll('.unit-card').forEach(card => {
+    card.style.display = !u || card.dataset.unit === u ? '' : 'none';
+    card.querySelector('.rip-section').style.display = q === 'print' ? 'none' : '';
+    card.querySelector('.prt-section').style.display = q === 'rip' ? 'none' : '';
+  });
+}
+
+function renderQueue(section, unit, data, kind) {
+  const items = (kind === 'rip' ? data.ripqueue : data.printqueue).map(i => ({...i, unit}));
+  if (kind === 'rip') {
+    section.querySelector('tbody').innerHTML = items.length
+      ? items.map(ripRow).join('')
+      : `<tr><td colspan="${RIP_KEYS.length}" class="text-secondary fst-italic">RIP Queue empty</td></tr>`;
+  } else {
+    section.querySelector('tbody').innerHTML = items.length
+      ? items.map(prtRow).join('')
+      : `<tr><td colspan="${PRT_KEYS.length}" class="text-secondary fst-italic">Print Queue empty</td></tr>`;
+  }
+  const countBadge = section.parentElement.querySelector('.queue-count');
+  countBadge.textContent = items.length;
+}
+
+function makeUnitCard(u, data) {
+  const card = document.createElement('div');
+  card.className = 'card mt-2 unit-card';
+  card.dataset.unit = u.number;
+  card.innerHTML = `
     <div class="card-header d-flex justify-content-between">
-      <span><strong>Unit {{ unit.number }}</strong> — {{ unit.name or 'Not configured' }}</span>
+      <span><strong>Unit ${u.number}</strong> — ${esc(u.name || 'Not configured')}</span>
+      <span class="queue-count badge bg-secondary">0</span>
     </div>
     <div class="card-body">
-      {% if q.available %}
-        <h2 class="h6 queue-heading">RIP Queue</h2>
-        {% if q.ripqueue %}
-          <table class="table table-sm table-hover small">
-            <thead><tr><th>Job</th><th>Source</th><th>Copies</th><th>Submitted</th><th>RIP</th></tr></thead>
-            <tbody>
-            {% for item in q.ripqueue %}
-              <tr>
-                <td>{{ item.get('job') }}</td>
-                <td class="text-truncate" style="max-width: 260px">{{ item.get('sourcefile') }}</td>
-                <td>{{ item.get('copies') }}</td>
-                <td>{{ (item.get('submission') | int | timestamp_to_dt) if item.get('submission') else '' }}</td>
-                <td>{{ 'done' if item.get('ripfinish') else 'waiting' }}</td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-        {% else %}<p class="small text-secondary mb-2">Empty.</p>{% endif %}
-        <h2 class="h6 queue-heading">Print Queue</h2>
-        {% if q.printqueue %}
-          <table class="table table-sm table-hover small">
-            <thead><tr><th>Index</th><th>Source</th><th>Notes</th><th>Output</th><th>Size</th></tr></thead>
-            <tbody>
-            {% for item in q.printqueue %}
-              <tr>
-                <td>{{ item.get('index') }}</td>
-                <td class="text-truncate" style="max-width: 260px">{{ item.get('sourcefile') }}</td>
-                <td>{{ item.get('notes') }}</td>
-                <td>{{ item.get('output') or 0 }}</td>
-                <td>{{ item.get('width') }}"; {{ item.get('height') }}"</td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-        {% else %}<p class="small text-secondary mb-0">Empty.</p>{% endif %}
-      {% else %}
-        <p class="text-secondary small mb-0">Queue data unavailable.</p>
-      {% endif %}
-    </div>
-  </div>
-  {% endfor %}
-{% else %}
-  <div class="alert alert-warning">
-    Can't reach SoftRIP's HTTP server. Make sure <strong>ImageNET</strong> is running inside SoftRIP, then refresh.
-  </div>
-{% endif %}
+      <h2 class="h6 queue-heading">RIP Queue</h2>
+      <div class="rip-section">${table(RIP_COLS, '', 'RIP Queue empty', RIP_KEYS)}</div>
+      <h2 class="h6 queue-heading mt-2">Print Queue</h2>
+      <div class="prt-section">${table(PRT_COLS, '', 'Print Queue empty', PRT_KEYS)}</div>
+    </div>`;
+  renderQueue(card.querySelector('.rip-section'), u.number, data, 'rip');
+  renderQueue(card.querySelector('.prt-section'), u.number, data, 'print');
+  return card;
+}
+
+let lastSystemJson = '';
+
+function updateCards(system) {
+  const container = $('units');
+  const existing = {};
+  container.querySelectorAll('.unit-card').forEach(c => existing[c.dataset.unit] = c);
+  system.units.filter(u => u.number).forEach(u => {
+    fetch(`/api/queue/${u.number}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data || !data.available) return;
+        let card = existing[u.number];
+        if (!card) { card = makeUnitCard(u, data); container.appendChild(card); }
+        else {
+          renderQueue(card.querySelector('.rip-section'), u.number, data, 'rip');
+          renderQueue(card.querySelector('.prt-section'), u.number, data, 'print');
+        }
+        applyFilters();
+      });
+  });
+  // drop units no longer present
+  container.querySelectorAll('.unit-card').forEach(c => {
+    if (!system.units.some(u => u.number === c.dataset.unit)) c.remove();
+  });
+}
+
+async function refresh() {
+  try {
+    const r = await fetch('/api/system');
+    if (!r.ok) throw new Error(r.status);
+    const system = await r.json();
+    if (!system.online) throw new Error('offline');
+    $('err').hidden = true;
+    $('online-pill').textContent = 'SoftRIP online';
+    $('online-pill').className = 'badge fs-5 bg-primary';
+    $('sysinfo').textContent = (system.name || 'Wasatch SoftRIP') + (system.serial ? ' · SN ' + system.serial : '');
+    const qpa = system.qpa;
+    $('qpa-pill').hidden = false;
+    $('qpa-pill').textContent = 'Queue Processing ' + (qpa ? 'active' : 'inactive');
+    $('qpa-pill').className = 'badge fs-5 ms-2 ' + (qpa ? 'bg-success' : 'bg-danger');
+    // unit dropdown
+    const sel = $('unit-filter');
+    const opts = system.units.filter(u => u.number).map(u => [u.number, `Unit ${u.number}`]);
+    const sig = JSON.stringify(opts);
+    if (sig !== lastSystemJson) {
+      lastSystemJson = sig;
+      sel.innerHTML = '<option value="">All units</option>' +
+        opts.map(([n, l]) => `<option value="${esc(n)}">${esc(l)}</option>`).join('');
+    }
+    updateCards(system);
+  } catch {
+    $('err').hidden = false;
+    $('online-pill').textContent = 'SoftRIP offline';
+    $('online-pill').className = 'badge fs-5 bg-danger';
+    $('qpa-pill').hidden = true;
+  }
+}
+
+$('btn-refresh').addEventListener('click', refresh);
+$('unit-filter').addEventListener('change', applyFilters);
+$('queue-filter').addEventListener('change', applyFilters);
+$('thumb-size').addEventListener('change', () => {
+  document.querySelectorAll('.lazy-thumb').forEach(img => img.className = thumbCls());
+});
+setInterval(refresh, POLL_SECONDS * 1000);
+refresh();
+</script>
 {% endblock %}

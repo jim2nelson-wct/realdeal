@@ -301,6 +301,42 @@ def layout_delete(layout_id):
     return redirect(url_for("main.layouts"))
 
 
+@bp.route("/api/system")
+def api_system():
+    s = rip_status.get_system()
+    return s
+
+
+@bp.route("/api/queue/<unit>")
+def api_queue(unit):
+    q = rip_status.get_queue(unit)
+    q["unit"] = unit
+    return q
+
+
+@bp.route("/thumb/rip/<unit>/<jobname>.png")
+def thumb_rip(unit, jobname):
+    return _proxy_thumb(f"{rip_status.SOFRIP_HTTP_URL.rstrip('/')}/ripqueue.{unit}/{jobname}.png")
+
+
+@bp.route("/thumb/prt/<unit>/<index>.png")
+def thumb_prt(unit, index):
+    return _proxy_thumb(f"{rip_status.SOFRIP_HTTP_URL.rstrip('/')}/prtqueue.{unit}/{index}.png")
+
+
+def _proxy_thumb(url):
+    import requests as _r
+    from flask import Response
+    try:
+        upstream = _r.get(url, timeout=rip_status.SOFRIP_HTTP_TIMEOUT)
+        if upstream.ok:
+            return Response(upstream.content, content_type=upstream.headers.get("content-type", "image/png"))
+    except _r.RequestException:
+        pass
+    from flask import abort
+    abort(404)
+
+
 @bp.route("/settings", methods=["GET", "POST"])
 def settings():
     if request.method == "POST":
