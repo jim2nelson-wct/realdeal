@@ -9,7 +9,8 @@ import requests
 from .status_config import SOFRIP_HTTP_URL, SOFRIP_HTTP_TIMEOUT
 
 __all__ = ["SOFRIP_HTTP_URL", "SOFRIP_HTTP_TIMEOUT", "get_system", "get_imgconfs",
-           "get_queue", "analyze_url_or_path", "confirm_in_rip_queue"]
+           "get_queue", "analyze_url_or_path", "confirm_in_rip_queue",
+           "confirm_in_print_queue", "layout_print_progress", "clear_queue", "reprint_by_index"]
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,63 @@ def confirm_in_rip_queue(unit: str, artwork_path: str, attempts: int = 6, delay:
                 return "confirmed"
         time.sleep(delay)
     return "pending"
+
+
+def confirm_in_print_queue(unit: str, attempts: int = 6, delay: float = 1.0) -> str:
+    """Poll the print queue watch for a layout job whose output copies has gone up.
+
+    One of 'confirmed'|'offline'|'pending'.
+    """
+    for _ in range(max(1, attempts)):
+        q = get_queue(unit)
+        if not q["available"]:
+            return "offline"
+        for item in q["printqueue"]:
+            output = str(item.get("output", "")).strip()
+            digits = "".join(ch for ch in output if ch.isdigit())
+            if str(item.get("layout", "")).lower() == "true" and digits.isdigit() and int(digits) > 0:
+                return "confirmed"
+        time.sleep(delay)
+    return "pending"
+
+
+def layout_print_progress(unit: str) -> str:
+    """Single snapshot check: 'confirmed' if a layout job on the unit has output copies, else 'offline'|'pending'."""
+    return confirm_in_print_queue(unit, attempts=1, delay=0.0)
+
+
+def _post_xml(xml: str) -> bool:
+    try:
+        resp = requests.post(SOFRIP_HTTP_URL.rstrip('/'), data=xml.encode('utf-8'),
+                             headers={'Content-Type': 'text/xml'}, timeout=SOFRIP_HTTP_TIMEOUT)
+        resp.raise_for_status()
+        return True
+    except requests.RequestException as e:
+        logger.warning("SoftRIP XML POST failed: %s", e)
+        return False
+
+
+def reprint_by_index(unit: str, indexes: list, copies: int = 1) -> bool:
+    """Reprint already-ripped print queue entries by index via PRINTQUEUE action XML."""
+    blocks = ''.join(
+        f'<PRINTQUEUE><INDEX>{_esc(i)}</INDEX><Copies>{copies}</Copies></PRINTQUEUE>'
+        for i in indexes)
+    xml = (f'<?xml version="1.0" encoding="utf-8"?>'
+           f'<WASATCH ACTION=JOB><PRINTUNIT>{_esc(unit)}</PRINTUNIT>{blocks}</WASATCH>')
+    return _post_xml(xml)
+
+
+def clear_queue(unit: str, queue: str) -> bool:
+    """Clear the RIP or print queue of a unit via a SYSTEM action XML.
+
+    queue: 'rip' clears the RIP queue, 'print' clears the print queue.
+    """
+    tag = 'CLEARRIPQUEUE' if queue == 'rip' else 'CLEARPRINTQUEUE'
+    xml = (f'<?xml version="1.0" encoding="utf-8"?>\n'
+           f'<WASATCH ACTION=SYSTEM>\n'
+           f'\t<{tag} PRINTUNIT="{unit}" />\n'
+           f'</WASATCH>')
+    return _post_xml(xml)
 
 
 def _parse(xml_text: str) -> ET.Element | None:

@@ -14,12 +14,12 @@
     <thead><tr><th>Name</th><th>Unit</th><th>Copies</th><th>Created</th><th>Status</th><th></th></tr></thead>
     <tbody>
     {% for layout in layouts %}
-      <tr>
+      <tr data-layout="{{ layout.id }}">
         <td><a href="{{ url_for('main.layout_detail', layout_id=layout.id) }}" class="text-decoration-none">{{ layout.name }}</a></td>
         <td>{{ layout.unit }}</td><td>{{ layout.copies }}</td>
         <td>{{ layout.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-        <td>
-          {% if layout.status == 'confirmed' %}<span class="badge bg-success">confirmed</span>
+        <td class="status-cell">
+          {% if layout.status == 'confirmed' %}<span class="badge bg-success">printed</span>
           {% elif layout.status == 'failed' %}<span class="badge bg-danger">failed</span>
           {% else %}<span class="badge bg-warning text-dark">pending</span>{% endif %}
         </td>
@@ -33,4 +33,19 @@
     </tbody>
   </table>
 {% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+setInterval(() => {
+  fetch('/api/layouts/status')
+    .then(r => r.ok ? r.json() : {})
+    .then(statuses => {
+      Object.entries(statuses).forEach(([id, s]) => {
+        const cell = document.querySelector(`[data-layout="${CSS.escape(id)}"] .status-cell`);
+        if (!cell) return;
+        if (s === 'confirmed') cell.innerHTML = '<span class="badge bg-success">printed</span>';
+      });
+    });
+}, 10000);
+</script>
 {% endblock %}

@@ -23,6 +23,6 @@ RASTER_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", "
 
 SQLALCHEMY_DATABASE_URI = f"sqlite:///{INSTANCE_DIR / 'realdeal.db'}"
 
-HOTXML_LOG = os.environ.get("SOFRIP_HOTXML_LOG", r"C:\wwrip\hotxml.log")
+HOTXML_LOG = os.environ.get("SOFRIP_HOTXML_LOG", r"C:\WasatchSoftRIP\hotxml.log")
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-change-me")

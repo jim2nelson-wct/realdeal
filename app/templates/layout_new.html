@@ -11,7 +11,9 @@
     <div class="col-md-4"><label class="form-label">Layout name</label>
       <input type="text" class="form-control" name="name" placeholder="e.g. Two-up banner" required></div>
     <div class="col-md-3"><label class="form-label">Unit</label>
-      <select class="form-select" name="unit"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></div>
+      <select class="form-select" name="unit">
+        {% for u in units %}<option value="{{ u }}" {{ 'selected' if u == '1' }}>{{ u }}</option>{% endfor %}
+      </select></div>
     <div class="col-md-3"><label class="form-label">Copies</label>
       <input type="number" class="form-control" name="copies" value="1" min="1" max="999"></div>
     <div class="col-md-2 mt-4"><input type="submit" class="btn btn-primary"></div>

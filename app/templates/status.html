@@ -1,23 +1,59 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}SoftRIP Status{% endblock %}
 {% block content %}
 <style>
   .unit-card > .card-header {
-    background-color: #B0E0A8;
+    background-color: #d5f5dd;
     color: #111;
     padding-top: 0.25rem;
     padding-bottom: 0.25rem;
   }
   .unit-card .table-hover > tbody > tr:hover > * {
-    background-color: #cfe2ff;
+    background-color: #b8b8b8;
     color: #111;
     box-shadow: none;
     --bs-table-color-state: #111;
   }
   .queue-heading { color: #0d6efd; }
-  .thumb-30 { height: 30px; width: auto; }
-  .thumb-60 { height: 60px; width: auto; }
-  .thumb-90 { height: 90px; width: auto; }
+  .thumb-30, .thumb-60, .thumb-90 {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+  }
+  .thumb-60 { width: 60px; height: 60px; }
+  .thumb-90 { width: 90px; height: 90px; }
+  .clear-btn, .clear-btn:hover, .clear-btn:focus {
+    background-color: #4a4a4a !important;
+    border-color: #3a3a3a !important;
+    color: red !important;
+  }
+  .prt-section .prt-row { cursor: pointer; }
+  .prt-section .prt-row.prt-selected > * {
+    background-color: #cfe2ff;
+    color: #111;
+    --bs-table-color-state: #111;
+  }
+  .reprint-copies { padding: 0 2px; font-size:.65rem; }
+  .reprint-btn, .reprint-btn:hover, .reprint-btn:focus {
+    background-color: #cfe2ff !important;
+    border-color: #aec4dd !important;
+    color: #111 !important;
+    padding: 3px 4px !important;
+    font-size: .65rem;
+  }
+  .clear-btn, .clear-btn:hover, .clear-btn:focus {
+    background-color: #b8b8b8 !important;
+    border-color: #a8a8a8 !important;
+    color: red !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .clear-btn {
+    padding-left: 2px !important;
+    padding-right: 2px !important;
+    height: 1.25rem;
+    line-height: 1.3;
+  }
 </style>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
   <h1 class="h3 mb-0">SoftRIP Status</h1>
@@ -33,12 +69,11 @@
     <select class="form-select form-select-sm" id="thumb-size" style="width:auto">
       <option value="30">30px</option><option value="60" selected>60px</option><option value="90">90px</option>
     </select>
-    <button class="btn btn-sm btn-outline-secondary" id="btn-refresh"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
   </div>
 </div>
 <div class="mb-2">
-  <span class="badge fs-5" id="online-pill">checking…</span>
-  <span class="badge fs-5{{ ' ms-2' }}" id="qpa-pill" hidden></span>
+  <span class="badge" id="online-pill">checking…</span>
+  <span class="badge ms-2" id="qpa-pill" hidden></span>
   <span class="small text-secondary ms-2" id="sysinfo"></span>
 </div>
 <div class="alert alert-warning alert-dismissible fade show" id="err" hidden>
@@ -46,6 +81,23 @@
   <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 <div id="units"></div>
+<div class="modal" id="reprintModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Reprint <span id="rm-count"></span> selected item(s)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body small">
+        Print the selected jobs individually, or combine them into a single new layout that is created and sent to the hot folder?
+      </div>
+      <div class="modal-footer py-1">
+        <button class="btn btn-sm btn-outline-primary" id="rm-individual">Print individually</button>
+        <button class="btn btn-sm btn-primary" id="rm-layout">Combine into new layout</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -75,7 +127,9 @@ function ripRow(item) {
 
 function prtRow(item) {
   const u = item.unit;
-  return `<tr class="unit-row" data-unit="${u}">
+  const h = parseFloat(item.height);
+  return `<tr class="unit-row prt-row" data-unit="${u}" data-index="${esc(item.index)}"
+     data-height="${encodeURIComponent(item.height || '')}" title="click to select for reprint">
     <td><img class="${thumbCls()} lazy-thumb" loading="lazy" src="/thumb/prt/${u}/${esc(item.index)}.png"
          onerror="this.style.display='none'"></td>
     <td>${esc(item.index)}</td>
@@ -119,10 +173,21 @@ function renderQueue(section, unit, data, kind) {
     section.querySelector('tbody').innerHTML = items.length
       ? items.map(prtRow).join('')
       : `<tr><td colspan="${PRT_KEYS.length}" class="text-secondary fst-italic">Print Queue empty</td></tr>`;
+    section.querySelectorAll('.prt-row').forEach(tr => {
+      if (selectedKeys.has(selKey(tr))) tr.classList.add('prt-selected');
+    });
   }
-  const countBadge = section.parentElement.querySelector('.queue-count');
+  const countBadge = section.closest('.card').querySelector('.queue-count');
   countBadge.textContent = items.length;
 }
+
+const selPrune = () => {
+  // drop selections for rows no longer present
+  const live = new Set();
+  document.querySelectorAll('.prt-row').forEach(tr => live.add(selKey(tr)));
+  [...selectedKeys].forEach(k => { if (!live.has(k)) selectedKeys.delete(k); });
+  updateSelCounts();
+};
 
 function makeUnitCard(u, data) {
   const card = document.createElement('div');
@@ -131,12 +196,31 @@ function makeUnitCard(u, data) {
   card.innerHTML = `
     <div class="card-header d-flex justify-content-between">
       <span><strong>Unit ${u.number}</strong> — ${esc(u.name || 'Not configured')}</span>
-      <span class="queue-count badge bg-secondary">0</span>
+      <span class="d-flex gap-1 align-items-center">
+        <button class="btn btn-sm clear-btn py-0"  data-unit="${u.number}" data-queue="rip" title="Delete all items in the RIP queue">
+          <span style="font-size:.65rem; padding:0">Clear RIP Queue</span>
+        </button>
+        <button class="btn btn-sm clear-btn py-0"  data-unit="${u.number}" data-queue="print" title="Delete all items in the print queue">
+          <span style="font-size:.65rem; padding:0">Clear Print Queue</span>
+        </button>
+        <span class="queue-count badge bg-secondary">0</span>
+      </span>
     </div>
     <div class="card-body">
-      <h2 class="h6 queue-heading">RIP Queue</h2>
+      <h2 class="h6 queue-heading d-flex justify-content-between align-items-center">
+        <span>RIP Queue</span>
+      </h2>
       <div class="rip-section">${table(RIP_COLS, '', 'RIP Queue empty', RIP_KEYS)}</div>
-      <h2 class="h6 queue-heading mt-2">Print Queue</h2>
+      <h2 class="h6 queue-heading mt-2 d-flex justify-content-between align-items-center">
+        <span>Print Queue</span>
+        <span class="d-flex gap-1 align-items-center">
+          <span class="small text-secondary" data-group="prt-sel-count">0 selected</span>
+          <input type="number" class="form-control form-control-sm reprint-copies" style="width:64px" min="1" max="999" value="1" title="copies per item">
+          <button class="btn btn-sm btn-primary reprint-btn" data-unit="${u.number}" title="Reprint selected items">
+            <i class="bi bi-printer"></i> Print Selected
+          </button>
+        </span>
+      </h2>
       <div class="prt-section">${table(PRT_COLS, '', 'Print Queue empty', PRT_KEYS)}</div>
     </div>`;
   renderQueue(card.querySelector('.rip-section'), u.number, data, 'rip');
@@ -164,6 +248,10 @@ function updateCards(system) {
         applyFilters();
       });
   });
+  // keep units in numerical order regardless of fetch completion order
+  [...container.querySelectorAll('.unit-card')]
+    .sort((a, b) => Number(a.dataset.unit) - Number(b.dataset.unit))
+    .forEach(c => container.appendChild(c));
   // drop units no longer present
   container.querySelectorAll('.unit-card').forEach(c => {
     if (!system.units.some(u => u.number === c.dataset.unit)) c.remove();
@@ -178,12 +266,12 @@ async function refresh() {
     if (!system.online) throw new Error('offline');
     $('err').hidden = true;
     $('online-pill').textContent = 'SoftRIP online';
-    $('online-pill').className = 'badge fs-5 bg-primary';
+    $('online-pill').className = 'badge bg-primary';
     $('sysinfo').textContent = (system.name || 'Wasatch SoftRIP') + (system.serial ? ' · SN ' + system.serial : '');
     const qpa = system.qpa;
     $('qpa-pill').hidden = false;
     $('qpa-pill').textContent = 'Queue Processing ' + (qpa ? 'active' : 'inactive');
-    $('qpa-pill').className = 'badge fs-5 ms-2 ' + (qpa ? 'bg-success' : 'bg-danger');
+    $('qpa-pill').className = 'badge ms-2 ' + (qpa ? 'bg-success' : 'bg-danger');
     // unit dropdown
     const sel = $('unit-filter');
     const opts = system.units.filter(u => u.number).map(u => [u.number, `Unit ${u.number}`]);
@@ -194,17 +282,92 @@ async function refresh() {
         opts.map(([n, l]) => `<option value="${esc(n)}">${esc(l)}</option>`).join('');
     }
     updateCards(system);
+    setTimeout(selPrune, 1500);
   } catch {
     $('err').hidden = false;
     $('online-pill').textContent = 'SoftRIP offline';
-    $('online-pill').className = 'badge fs-5 bg-danger';
+    $('online-pill').className = 'badge bg-danger';
     $('qpa-pill').hidden = true;
   }
 }
 
-$('btn-refresh').addEventListener('click', refresh);
 $('unit-filter').addEventListener('change', applyFilters);
 $('queue-filter').addEventListener('change', applyFilters);
+
+const reprintModal = new bootstrap.Modal($('reprintModal'));
+let pendingSel = null;
+
+const selKey = cb => `${cb.closest('.unit-card').dataset.unit}:${cb.dataset.index}`;
+const selectedKeys = new Set();
+
+$('units').addEventListener('click', e => {
+  const tr = e.target.closest('.prt-row');
+  if (!tr) return;
+  if (e.target.closest('a, button, input')) return;
+  tr.classList.toggle('prt-selected');
+  const k = selKey(tr);
+  if (tr.classList.contains('prt-selected')) selectedKeys.add(k); else selectedKeys.delete(k);
+  updateSelCounts();
+});
+
+function updateSelCounts() {
+  document.querySelectorAll('.unit-card').forEach(card => {
+    const n = card.querySelectorAll('.prt-section .prt-row.prt-selected').length;
+    card.querySelectorAll('[data-group="prt-sel-count"]').forEach(el => el.textContent = `${n} selected`);
+  });
+}
+
+const selectedPrtRows = card =>
+  [...card.querySelectorAll('.prt-section .prt-row.prt-selected')].map(tr => {
+    const hRaw = decodeURIComponent(tr.dataset.height || '');
+    const h = parseFloat(hRaw);
+    return {index: tr.dataset.index, height: Number.isFinite(h) ? h : 1.0};
+  });
+
+function sendReprint(sel, mode) {
+  const payload = {unit: sel.unit, items: sel.items, copies: sel.copies, mode};
+  fetch('/api/prt/reprint', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  }).then(r => r.json()).then(j => {
+    if (!j.ok && j.error) alert(`Reprint failed: ${j.error}`);
+  }).then(() => refresh());
+}
+
+$('units').addEventListener('click', e => {
+  const rbtn = e.target.closest('.reprint-btn');
+  if (rbtn) {
+    const card = rbtn.closest('.unit-card');
+    const items = selectedPrtRows(card);
+    if (items.length === 0) return;
+    const copies = parseInt(card.querySelector('.reprint-copies').value, 10) || 1;
+    const sel = {unit: rbtn.dataset.unit, items, copies};
+    if (items.length === 1) { sendReprint(sel, 'individual'); return; }
+    pendingSel = sel;
+    $('rm-count').textContent = items.length;
+    reprintModal.show();
+    return;
+  }
+  const btn = e.target.closest('.clear-btn');
+  if (!btn) return;
+  const label = btn.dataset.queue === 'rip' ? 'RIP queue' : 'print queue';
+  if (!confirm(`Delete all items in the Unit ${btn.dataset.unit} ${label}?`)) return;
+  btn.disabled = true;
+  fetch(`/api/queue/${btn.dataset.unit}/clear`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({queue: btn.dataset.queue})
+  }).then(() => refresh()).finally(() => btn.disabled = false);
+});
+
+$('rm-individual').addEventListener('click', () => {
+  reprintModal.hide();
+  if (pendingSel) sendReprint(pendingSel, 'individual');
+});
+$('rm-layout').addEventListener('click', () => {
+  reprintModal.hide();
+  if (pendingSel) sendReprint({...pendingSel, name: `Reprint ${new Date().toLocaleString()}`}, 'layout');
+});
+
 $('thumb-size').addEventListener('change', () => {
   document.querySelectorAll('.lazy-thumb').forEach(img => img.className = thumbCls());
 });
@@ -212,3 +375,4 @@ setInterval(refresh, POLL_SECONDS * 1000);
 refresh();
 </script>
 {% endblock %}
+

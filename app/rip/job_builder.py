@@ -42,6 +42,26 @@ class WasatchXML:
             lines.append('    <DELETEAFTERRIP />')
         if j.delete_after_print:
             lines.append('    <DELETEAFTERPRINT />')
+        if (j.ann_job_name or j.ann_file_name or j.ann_printer or j.ann_imgconf or j.ann_date
+                or j.ann_barcode or j.ann_qrcode or (j.ann_comment_on and j.ann_comment)):
+            lines.append('    <ANNOTATE>')
+            if j.ann_job_name:
+                lines.append('      <JOBNAME />')
+            if j.ann_file_name:
+                lines.append('      <FILENAME />')
+            if j.ann_printer:
+                lines.append('      <PRINTER />')
+            if j.ann_imgconf:
+                lines.append('      <IMGCONF_ANNOTATE />')
+            if j.ann_date:
+                lines.append('      <DATE />')
+            if j.ann_comment_on and j.ann_comment:
+                lines.append(f'      <COMMENT>{_esc(j.ann_comment)}</COMMENT>')
+            if j.ann_barcode:
+                lines.append('      <BARCODE />')
+            if j.ann_qrcode:
+                lines.append(f'      <QRCODE HEIGHT={j.ann_qrcode_height or 0.75}></QRCODE>')
+            lines.append('    </ANNOTATE>')
         lines.append(f'    <Copies>{j.copies or 0}</Copies>')
         lines.append('  </PAGE>')
         lines.append('</WASATCH>')
@@ -67,6 +87,56 @@ class WasatchXML:
                 pass
             raise
         logger.info('Wrote job XML %s', final)
+        return final
+
+
+class WasatchPrtLayoutXML:
+    """Builds a <LAYOUT> of pre-ripped print queue entries, selected by index.
+
+    Items are dicts with 'index' and optional 'height' (inches).
+    Entries are stacked vertically starting at the origin.
+    """
+
+    def __init__(self, layout, items):
+        self.layout = layout
+        self.items = items
+
+    def to_xml(self) -> str:
+        lay = self.layout
+        lines = ['<?xml version="1.0" encoding="utf-8"?>', '<WASATCH ACTION=JOB>']
+        attrs = ''
+        if lay.notes:
+            attrs = f' NOTES={_esc(lay.notes)}'
+        lines.append(f'  <LAYOUT{attrs}>')
+        lines.append(f'    <Copies>{lay.copies or 1}</Copies>')
+        y = 0.0
+        for it in self.items:
+            lines.append(f'    <PRT XPOSITION=0.0 YPOSITION={y:g}>w{it["index"]}</PRT>')
+            y += max(float(it.get("height") or 1.0), 0.0) + 0.5
+        lines.append('  </LAYOUT>')
+        lines.append('</WASATCH>')
+        return '\n'.join(lines)
+
+    def write_atomic(self, hotfolder_path: str) -> Path:
+        dest = Path(hotfolder_path)
+        dest.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime('%Y%m%d_%H%M%S')
+        filename = f'{stamp}_layout_{_safe_name(self.layout.name)}.xml'
+        fd, tmp = tempfile.mkstemp(prefix=filename + '.', suffix='.tmp', dir=str(dest))
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(self.to_xml())
+                f.flush()
+                os.fsync(f.fileno())
+            final = dest / filename
+            os.replace(tmp, final)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+        logger.info('Wrote print-queue layout XML %s', final)
         return final
 
 

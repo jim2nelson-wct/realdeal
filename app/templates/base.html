@@ -19,11 +19,12 @@
   <div class="container-fluid px-3">
     <a class="navbar-brand fw-semibold" href="{{ url_for('main.index') }}"><i class="bi bi-printer me-2"></i>RealDeal</a>
     <div>
-      <a class="btn btn-primary btn-sm" href="{{ url_for('main.new_job') }}"><i class="bi bi-plus-lg me-1"></i>New Job</a>
-      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('main.layouts') }}"><i class="bi bi-grid-1x2 me-1"></i>Layouts</a>
-      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('main.rip_status_page') }}"><i class="bi bi-activity me-1"></i>Status</a>
-      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('main.logs') }}"><i class="bi bi-terminal me-1"></i>Logs</a>
-      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('main.settings') }}"><i class="bi bi-gear me-1"></i>Settings</a>
+      {% set active = request.endpoint %}
+      <a class="btn btn-sm {{ 'btn-primary' if active == 'main.new_job' else 'btn-outline-secondary' }}" href="{{ url_for('main.new_job') }}"><i class="bi bi-plus-lg me-1"></i>New Job</a>
+      <a class="btn btn-sm {{ 'btn-primary' if active and active.startswith('main.layout') else 'btn-outline-secondary' }}" href="{{ url_for('main.layouts') }}"><i class="bi bi-grid-1x2 me-1"></i>Layouts</a>
+      <a class="btn btn-sm {{ 'btn-primary' if active == 'main.rip_status_page' else 'btn-outline-secondary' }}" href="{{ url_for('main.rip_status_page') }}"><i class="bi bi-activity me-1"></i>Status</a>
+      <a class="btn btn-sm {{ 'btn-primary' if active == 'main.logs' else 'btn-outline-secondary' }}" href="{{ url_for('main.logs') }}"><i class="bi bi-terminal me-1"></i>Logs</a>
+      <a class="btn btn-sm {{ 'btn-primary' if active == 'main.settings' else 'btn-outline-secondary' }}" href="{{ url_for('main.settings') }}"><i class="bi bi-gear me-1"></i>Settings</a>
     </div>
   </div>
 </nav>

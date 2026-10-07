@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 
 from .. import db
 from ..models import Job, Layout, LayoutItem, Hotfolder, LogSettings
-from ..rip.job_builder import WasatchXML, WasatchLayoutXML
+from ..rip.job_builder import WasatchXML, WasatchLayoutXML, WasatchPrtLayoutXML
 from ..rip import status as rip_status
 from ..rip.status import analyze_url_or_path
 from ..thumbs import make_thumb
@@ -40,7 +40,7 @@ def index():
 @bp.route("/new", methods=["GET", "POST"])
 def new_job():
     if request.method == "GET":
-        return render_template("new_job.html", units=sorted(unit_folders().keys()))
+        return render_template("new_job.html", units=softrip_units())
 
     uploaded = request.files.get("artwork")
     if not uploaded or uploaded.filename == "":
@@ -69,7 +69,19 @@ def new_job():
         notes=request.form.get("notes", "").strip(),
         delete_after_rip=bool(request.form.get("delete_after_rip")),
         delete_after_print=bool(request.form.get("delete_after_print")),
+        ann_job_name=bool(request.form.get("ann_job_name")),
+        ann_file_name=bool(request.form.get("ann_file_name")),
+        ann_printer=bool(request.form.get("ann_printer")),
+        ann_imgconf=bool(request.form.get("ann_imgconf")),
+        ann_date=bool(request.form.get("ann_date")),
+        ann_barcode=bool(request.form.get("ann_barcode")),
+        ann_comment_on=bool(request.form.get("ann_comment_on")),
+        ann_comment=request.form.get("ann_comment", "").strip(),
+        ann_qrcode=bool(request.form.get("ann_qrcode")),
     )
+    qr_h = request.form.get("ann_qrcode_height", "").strip()
+    if qr_h:
+        job.ann_qrcode_height = float(qr_h)
     bleed = request.form.get("cut_bleed", "").strip()
     radius = request.form.get("cut_radius", "").strip()
     if request.form.get("cut_enabled") == "1" and bleed != "":
@@ -142,9 +154,7 @@ def api_file_analysis(job_id):
 
 @bp.route("/status")
 def rip_status_page():
-    system = rip_status.get_system()
-    queues = {u["number"]: rip_status.get_queue(u["number"]) for u in system["units"] if u.get("number")}
-    return render_template("status.html", system=system, queues=queues)
+    return render_template("status.html")
 
 
 @bp.route("/jobs/<job_id>/check", methods=["POST"])
@@ -208,10 +218,21 @@ def layouts():
     return render_template("layouts.html", layouts=rows)
 
 
+def softrip_units():
+    """Units actually configured in SoftRIP; fall back to configured hot folder units."""
+    system = rip_status.get_system()
+    if system["online"]:
+        nums = [u["number"] for u in system["units"]
+                if u.get("number") and "not configured" not in (u.get("name") or "").lower()]
+        if nums:
+            return sorted(nums, key=lambda n: int(n) if str(n).isdigit() else 99)
+    return sorted(unit_folders().keys())
+
+
 @bp.route("/layouts/new", methods=["GET"])
 def layout_new():
     jobs = Job.query.order_by(Job.created_at.desc()).all()
-    return render_template("layout_new.html", jobs=jobs)
+    return render_template("layout_new.html", jobs=jobs, units=softrip_units())
 
 
 @bp.route("/layouts", methods=["POST"])
@@ -282,7 +303,7 @@ def layout_send(layout_id):
     folders = unit_folders()
     try:
         WasatchLayoutXML(layout, arts).write_atomic(folders[layout.unit])
-        layout.status = rip_status.confirm_in_rip_queue(layout.unit, str(arts[0][1]))
+        layout.status = rip_status.confirm_in_print_queue(layout.unit)
         db.session.commit()
         flash("Layout submitted to hot folder.", "success")
     except Exception:
@@ -314,6 +335,60 @@ def api_queue(unit):
     return q
 
 
+@bp.route("/api/layouts/status")
+def api_layouts_status():
+    statuses = {}
+    pending = Layout.query.filter(Layout.status.notin_(["confirmed", "failed"])).all()
+    for lay in pending:
+        statuses[str(lay.id)] = rip_status.layout_print_progress(lay.unit)
+        if statuses[str(lay.id)] == "confirmed":
+            lay.status = "confirmed"
+    if any(s == "confirmed" for s in statuses.values()):
+        db.session.commit()
+    return statuses
+
+
+@bp.route("/api/queue/<unit>/clear", methods=["POST"])
+def api_queue_clear(unit):
+    queue = (request.get_json(silent=True) or {}).get("queue")
+    if queue not in ("rip", "print"):
+        return {"ok": False, "error": "queue must be 'rip' or 'print'"}, 400
+    ok = rip_status.clear_queue(unit, queue)
+    return {"ok": ok}
+
+
+@bp.route("/api/prt/reprint", methods=["POST"])
+def api_prt_reprint():
+    d = request.get_json(silent=True) or {}
+    unit = str(d.get("unit", ""))
+    mode = d.get("mode", "individual")
+    copies = int(d.get("copies", 1) or 1)
+    items = [it for it in (d.get("items") or []) if str(it.get("index", "")).strip()]
+    if mode not in ("individual", "layout") or not items:
+        return {"ok": False, "error": "bad request"}, 400
+    if mode == "individual":
+        indexes = [str(it["index"]).strip() for it in items]
+        ok = rip_status.reprint_by_index(unit, indexes, copies)
+        return {"ok": ok}
+    folders = unit_folders()
+    if unit not in folders:
+        return {"ok": False, "error": f"no hot folder configured for unit {unit}"}, 400
+    from datetime import datetime
+    lay = Layout(
+        name=(d.get("name") or "").strip() or f"Reprint {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        unit=unit, copies=copies, status="pending")
+    db.session.add(lay)
+    db.session.commit()
+    try:
+        WasatchPrtLayoutXML(lay, items).write_atomic(folders[unit])
+    except Exception:
+        db.session.delete(lay)
+        db.session.commit()
+        current_app.logger.exception("Print-queue layout submission failed")
+        return {"ok": False, "error": "writing to the hot folder failed"}, 500
+    return {"ok": True, "layout_id": lay.id}
+
+
 @bp.route("/thumb/rip/<unit>/<jobname>.png")
 def thumb_rip(unit, jobname):
     return _proxy_thumb(f"{rip_status.SOFRIP_HTTP_URL.rstrip('/')}/ripqueue.{unit}/{jobname}.png")
@@ -321,8 +396,7 @@ def thumb_rip(unit, jobname):
 
 @bp.route("/thumb/prt/<unit>/<index>.png")
 def thumb_prt(unit, index):
-    return _proxy_thumb(f"{rip_status.SOFRIP_HTTP_URL.rstrip('/')}/prtqueue.{unit}/{index}.png")
-
+    return _proxy_thumb(f"{rip_status.SOFRIP_HTTP_URL.rstrip('/')}/prtqueue.{unit}/w{index}.png")
 
 def _proxy_thumb(url):
     import requests as _r

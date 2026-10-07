@@ -42,6 +42,18 @@ class Job(db.Model):
     cut_bleed = db.Column(db.Float, default=None)
     cut_radius = db.Column(db.Float, default=0.0)
 
+    # annotations (ANNOTATE block in job XML)
+    ann_job_name = db.Column(db.Boolean, default=False)
+    ann_file_name = db.Column(db.Boolean, default=False)
+    ann_printer = db.Column(db.Boolean, default=False)
+    ann_imgconf = db.Column(db.Boolean, default=False)
+    ann_date = db.Column(db.Boolean, default=False)
+    ann_barcode = db.Column(db.Boolean, default=False)
+    ann_comment_on = db.Column(db.Boolean, default=False)
+    ann_comment = db.Column(db.String(500), default="")
+    ann_qrcode = db.Column(db.Boolean, default=False)
+    ann_qrcode_height = db.Column(db.Float, default=0.75)
+
 
 class Layout(db.Model):
     __tablename__ = "layouts"

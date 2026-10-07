@@ -29,6 +29,11 @@ def create_app():
         _ensure_column(db.engine, "jobs", "status", "VARCHAR(20) NOT NULL DEFAULT 'pending'")
         _ensure_column(db.engine, "jobs", "cut_bleed", "FLOAT")
         _ensure_column(db.engine, "jobs", "cut_radius", "FLOAT DEFAULT 0.0")
+        for col in ["ann_job_name", "ann_file_name", "ann_printer", "ann_imgconf",
+                    "ann_date", "ann_barcode", "ann_comment_on", "ann_qrcode"]:
+            _ensure_column(db.engine, "jobs", col, "BOOLEAN NOT NULL DEFAULT 0")
+        _ensure_column(db.engine, "jobs", "ann_comment", "VARCHAR(500) DEFAULT ''")
+        _ensure_column(db.engine, "jobs", "ann_qrcode_height", "FLOAT DEFAULT 0.75")
 
     return app
 

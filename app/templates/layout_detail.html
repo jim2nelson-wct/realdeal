@@ -12,7 +12,7 @@
 </div>
 <p class="small text-secondary">
   Unit {{ layout.unit }} &middot; {{ layout.copies }} cop{{ 'y' if layout.copies == 1 else 'ies' }}
-  {% if layout.status == 'confirmed' %} &middot; <span class="badge bg-success">confirmed in RIP queue</span>
+  {% if layout.status == 'confirmed' %} &middot; <span class="badge bg-success">printed</span>
   {% elif layout.status == 'failed' %} &middot; <span class="badge bg-danger">failed</span>
   {% else %} &middot; <span class="badge bg-warning text-dark">not yet confirmed</span>{% endif %}
   {% if layout.notes %} &middot; notes: {{ layout.notes }}{% endif %}
